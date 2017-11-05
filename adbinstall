@@ -1,0 +1,259 @@
+#!/bin/bash
+# MAINTAINER visu4l ch.visu4l@gmail.com
+
+AAPT_PATH=`which aapt`
+ADB_PATH=`which adb`
+
+#check init
+if [ $AAPT_PATH == *"not found"* ];then
+    echo "aapt command is not exist or not PATH"
+    echo "You must register path of aapt command to SYSTEM PATH"
+    exit -1
+fi
+
+if [ $ADB_PATH == *"not found"* ];then
+    echo "adb command is not exist or not PATH"
+    echo "You must register path of aapt command to SYSTEM PATH"
+    exit -1
+fi
+
+show_help(){
+    echo "Usage: $(basename "$0") [options] <apk_file>"
+    echo ""
+    echo "options"
+    echo "-a,--all            : install & run & logcat"
+    echo "-i,--install        : install app"
+    #echo "-u,--update         : update app"
+    echo "-r,--run            : run app"
+    echo "-e,--exit           : exit app"
+    echo "-l,--logcat         : logcat"
+    echo "-u,--uninstall      : uninstall app"
+}
+
+SET_INSTALL=0
+SET_EXIT=0
+SET_UNINSTALL=0
+SET_LOGCAT=0
+SET_RUN=0
+apk_file=""
+
+if [ $# == 0 ];then
+    show_help
+    exit -1
+fi
+
+while [ "$1" != "" ];do
+    case $1 in
+        -a|--all)
+        SET_INSTALL=1
+        SET_RUN=1
+        SET_LOGCAT=1
+        ;;
+        -i|--install)
+        SET_INSTALL=1
+        ;;
+        -r|--run)
+        SET_RUN=1
+        ;;
+        -l|--logcat)
+        SET_LOGCAT=1
+        ;;
+        -u|--uninstall)
+        SET_UNINSTALL=1
+        ;;
+        -e|--exit)
+        SET_EXIT=1
+        ;;
+        -h|--help)
+        show_help
+        exit 0
+        ;;
+        *)
+        apk_file=$1
+    esac
+
+    shift
+done
+
+# check apk file
+if [ ! -f "$apk_file" ];then
+    echo "ERROR: apk file does not exist > $apk_file"
+    exit -1
+fi
+verify_apk_file=`$AAPT_PATH l $apk_file | grep AndroidManifest.xml | wc -l |awk '{print $1}'`
+if [ "$verify_apk_file" == 0 ];then
+    echo "ERROR : wrong apk file. try again. "
+    exit -1
+fi
+
+# Get Application Informations
+package_name=`$AAPT_PATH dump badging $apk_file |grep "package:\ name=" | awk '{print $2}' |sed s/name=//g |sed s/\'//g`
+main_activity=`$AAPT_PATH dump badging $apk_file | awk -F" " '/launchable-activity/ {print $2}'| awk -F"'" '/name=/ {print $2}'`
+version_name=`$AAPT_PATH dump badging $apk_file |grep "package:\ name=" | awk '{split($3, result, "="); split(result[2], ret, "'\''"); print ret[2]}'`
+version_code=`$AAPT_PATH dump badging $apk_file |grep "package:\ name=" | awk '{split($4, result, "="); split(result[2], ret, "'\''"); print ret[2]}'`
+
+if [ -z $package_name ];then
+    echo "ERROR(1): can not getting package name."
+    exit 1
+fi
+
+# print Application Informations
+echo "- App Information"
+echo "  Package Name : $package_name"
+echo "  Main Activity : $main_activity"
+if [ ! -z $version_name ];then
+echo "  App Version Code : $version_name($version_code)"
+fi
+echo ""
+
+# get Device list
+devices=(`$ADB_PATH devices | awk '{print $1}' | sed 1,1d`)
+count_device=${#devices[@]}
+if [ "$count_device" -eq 0 ];then
+    echo "ERROR(2): There is no connected device."
+    exit 2
+fi
+
+# install app
+if [ "$SET_INSTALL" -eq "1" ];then
+    for device in "${devices[@]}";do
+        model_name=`$ADB_PATH devices -l |grep $device |awk '{split($5, result, ":"); print result[2]}'`
+        is_installed=`$ADB_PATH -s $device shell 'pm list packages' | grep $package_name | wc -l |awk '{print $1}'`
+
+        if [ "$is_installed" -eq 1 ];then
+            echo "- [$model_name] Uninstall the App that same package name."
+            result=`$ADB_PATH -s $device uninstall $package_name`
+            if [[ $result != *"Success"* ]];then
+               echo "ERROR(3) : uninstall error > $result"
+               exit 3
+            else
+                echo "$result"
+            fi
+            echo ""
+        fi
+        echo "- [$model_name] Install App"
+        result=`$ADB_PATH -s $device install $apk_file`
+        if [[ $result != *"Success"* ]];then
+            echo "ERROR(4) : install error > $result"
+            exit 4
+        else
+            echo "$result"
+        fi
+    done
+    echo ""
+fi
+
+
+#run app
+if [ "$SET_RUN" -eq "1" ];then
+
+    for device in "${devices[@]}";do
+        model_name=`$ADB_PATH devices -l |grep $device |awk '{split($5, result, ":"); print result[2]}'`
+        install_package_count=`$ADB_PATH -s $device shell 'pm list packages' | grep $package_name | wc -l`
+
+        # if screen status is locked, screen wake up and unlock
+        is_lock_screen=`$ADB_PATH -s $device shell dumpsys power | grep 'mHoldingDisplaySuspendBlocker' | awk '{split($0, result, "="); print result[2]}'`
+        if [ "$is_lock_screen" == "false" ];then
+            $ADB_PATH -s $device shell input keyevent 26
+            $ADB_PATH -s $device shell input keyevent 82
+        fi
+
+        if [ "$install_package_count" -gt 0 ];then
+            echo "- [$model_name] Run App"
+            result=`$ADB_PATH -s $device shell am start -n $package_name/$main_activity`
+            if [[ $result == *"Error"* ]];then
+                echo "ERROR(5) : runnning error > $result"
+            else
+                echo "Success"
+            fi
+        else
+           echo "ERROR(3): This app is not installed."
+        fi
+    done
+    echo ""
+fi
+
+#logcat
+if [ "$SET_LOGCAT" -eq "1" ];then
+
+    if [ "$count_device" -gt 1 ];then
+        echo " - Select a device to display the log"
+        num=1
+        for device in "${devices[@]}";do
+            model_name=`$ADB_PATH devices -l |grep $device |awk '{split($5, result, ":"); print result[2]}'`
+            echo "$num : $device($model_name)"
+            num=$((num + 1))
+        done
+        read device_num
+        echo "logcat : ${devices[$((device_num-1))]}"
+        target_device_name=${devices[$((device_num-1))]}
+    else
+        target_device_name=${devices[0]}
+    fi
+    echo ""
+
+    # Device Version Check
+    device_version=`$ADB_PATH -s $target_device_name shell getprop ro.build.version.sdk`
+    ps_option=""
+    if [ "$device_version" -gt 25 ];then
+        ps_option="-ef"
+        echo "version 26"
+    fi
+
+    while [ "1" -eq "1" ];do
+        echo "  Waiting to be executed..."
+        is_running=`$ADB_PATH -s $target_device_name shell ps $ps_option | grep $package_name | wc -l | awk '{print $1}'`
+        if [ "$is_running" != 0 ];then
+            echo "  find process"
+            break
+        fi
+        sleep 1
+    done
+    pid=`$ADB_PATH -s $target_device_name shell ps $ps_option |grep $package_name | head -n1 | awk '{print $2}'`
+    echo "  PID : $pid"
+    echo "  "
+    adb -s $target_device_name logcat |grep " $pid "
+fi
+
+
+# exit app
+if [ "$SET_EXIT" -eq "1" ];then
+    for device in "${devices[@]}";do
+        model_name=`$ADB_PATH devices -l |grep $device |awk '{split($5, result, ":"); print result[2]}'`
+        install_package_count=`$ADB_PATH -s $device shell 'pm list packages' | grep $package_name | wc -l`
+
+        echo "- [$model_name] Exit App"
+        if [ "$install_package_count" -gt 0 ];then
+            $ADB_PATH -s $device shell am force-stop $package_name
+            echo "Success"
+        else
+            echo "does not exist running process"
+        fi
+    done
+    echo ""
+fi
+
+
+# Uninstall
+if [ "$SET_UNINSTALL" -eq "1" ];then
+    for device in "${devices[@]}";do
+        model_name=`$ADB_PATH devices -l |grep $device |awk '{split($5, result, ":"); print result[2]}'`
+        install_package_count=`$ADB_PATH -s $device shell 'pm list packages' | grep $package_name | wc -l`
+
+        echo "- [$model_name] Uninstall App"
+        if [ "$install_package_count" -gt 0 ];then
+            result=`$ADB_PATH -s $device uninstall $package_name`
+            if [[ $result != *"Success"* ]];then
+                echo "ERROR(7) : uninstall error > $result"
+            else
+                echo "Success"
+            fi    
+        else
+            echo "Succes(It's not installed the App)"
+        fi
+    done
+    echo ""
+fi
+
+echo "Finish"
+exit 0
