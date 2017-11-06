@@ -134,8 +134,9 @@ if [ "$SET_INSTALL" -eq "1" ];then
         echo "- [$model_name] Install App"
         result=`$ADB_PATH -s $device install $apk_file`
         if [[ $result != *"Success"* ]];then
-            echo "ERROR(4) : install error > $result"
-            exit 4
+            echo "$result"
+            #echo "ERROR(4) : install error > $result"
+            #exit 4
         else
             echo "$result"
         fi
