@@ -24,7 +24,7 @@ show_help(){
     echo "-a,--all            : install & run & logcat"
     echo "-s,--sign           : sign app(apksigner v1)"
     echo "-i,--install        : install app(delete if same app existed)"
-    echo "-r,--replace        : replace app(keep the data)"
+    echo "-k,--keep           : replace app(keep the data)"
     echo "-r,--run            : run app"
     echo "-e,--exit           : exit app"
     echo "-l,--logcat         : logcat"
@@ -59,7 +59,7 @@ while [ "$1" != "" ];do
         -i|--install)
         SET_INSTALL=1
         ;;
-        -r|--replace)
+        -k|--keep)
         SET_UPDATE=1
         ;;
         -r|--run)
