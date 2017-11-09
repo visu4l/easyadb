@@ -1,0 +1,108 @@
+#!/bin/bash
+# MAINTAINER visu4l ch.visu4l@gmail.com
+
+ZIPALIGN_PATH=`which zipalign`
+JARSIGN_PATH=`which jarsigner`
+APKSIGN_PATH=`which apksigner`
+
+KEY_STORE="/Users/visu4l/tools/myscript/keystore_visu4l"
+KEY_STORE_PASS="visu4l"
+KEY_ALIAS="visu4l"
+KEY_PASS="visu4l"
+
+show_help(){
+    echo "Usage:  $(basename "$0") <-j | -a> [apksign_option] <apk_file>"
+    echo ""
+    echo "Options:"
+    echo "-j|--jar         : jarsigner"
+    echo "-a|--apk         : apksigner(default)"
+    echo ""
+    echo "Options for APKSigner:"
+    echo "-v1=true,false   : apksigner v1 signing(default)"
+    echo "-v2=true,false   : apksigner v2 signing"
+    echo ""
+    echo "example:"
+    echo "$(basename "$0") test.apk                         > apksigner v1"
+    echo "$(basename "$0") -v1=true -v2=false test.apk      > apksigner v1"
+    echo "$(basename "$0") -a -v1=true -v2=false test.apk   > apksigner v1"
+    echo "$(basename "$0") -j test.apk                      > jarsigner"
+}
+
+if [ "$#" == 0 ];then
+    show_help
+    exit 0
+fi
+
+TYPE_JAR=1
+TYPE_APK=2
+
+TYPE_V1=1
+TYPE_V2=2
+
+SELECT_SIGN_TYPE=$TYPE_APK
+SIGN_VERSION_V1=true
+SIGN_VERSION_V2=false
+
+apk_file=""
+
+
+while [ "$1" != "" ];do
+
+    case $1 in
+        -j|--jar)
+        SELECT_SIGN_TYPE=$TYPE_JAR
+        ;;
+        
+        -a|--apk)
+        SELECT_SIGN_TYPE=$TYPE_APK
+        ;;
+        
+        -v1*)
+        option=$1
+        arr=(${option//=/ })
+        if [ ${arr[1]} != "true" ];then
+            SIGN_VERSION_V1=false
+        fi
+        ;;
+
+        -v2*)
+        option=$1
+        arr=(${option//=/ })
+        if [ ${arr[1]} == "true" ];then
+            SIGN_VERSION_V2=true
+        fi
+        ;;
+        
+        -h|--help)
+        show_help
+        exit 0
+        ;;
+        
+        *)
+        apk_file=$1
+        ;;
+    esac
+    shift
+done
+
+if [ $SELECT_SIGN_TYPE == $TYPE_JAR ];then
+    echo "- signing to jarsigner"
+    $JARSIGN_PATH -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore $KEY_STORE -storepass $KEY_STORE_PASS  $apk_file $KEY_ALIAS
+
+    echo -e "\n- zipaligning"
+    $ZIPALIGN_PATH -v 4 $apk_file signed_$apk_file
+else
+    echo -e "- zipaligning"
+    $ZIPALIGN_PATH -v 4 $apk_file signed_$apk_file
+    #sleep 3
+    echo -e "\n- signing to apksigner"
+    echo -e "  v1 : $SIGN_VERSION_V1"
+    echo -e "  v2 : $SIGN_VERSION_V2"
+    $APKSIGN_PATH sign --v1-signing-enabled $SIGN_VERSION_V1 --v2-signing-enabled $SIGN_VERSION_V2  --ks $KEY_STORE --ks-pass pass:$KEY_PASS --ks-key-alias $KEY_ALIAS signed_$apk_file
+fi
+echo ""
+
+echo " - finish"
+echo "check the [ signed_$apk_file ]"
+
+exit 0

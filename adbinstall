@@ -22,8 +22,9 @@ show_help(){
     echo ""
     echo "options"
     echo "-a,--all            : install & run & logcat"
-    echo "-i,--install        : install app"
-    #echo "-u,--update         : update app"
+    echo "-s,--sign           : sign app(apksigner v1)"
+    echo "-i,--install        : install app(delete if same app existed)"
+    echo "-r,--replace        : replace app(keep the data)"
     echo "-r,--run            : run app"
     echo "-e,--exit           : exit app"
     echo "-l,--logcat         : logcat"
@@ -31,6 +32,8 @@ show_help(){
 }
 
 SET_INSTALL=0
+SET_UPDATE=0
+SET_SIGN=0
 SET_EXIT=0
 SET_UNINSTALL=0
 SET_LOGCAT=0
@@ -45,12 +48,19 @@ fi
 while [ "$1" != "" ];do
     case $1 in
         -a|--all)
+        SET_SIGN=1
         SET_INSTALL=1
         SET_RUN=1
         SET_LOGCAT=1
         ;;
+        -s|--sign)
+        SET_SIGN=1
+        ;;
         -i|--install)
         SET_INSTALL=1
+        ;;
+        -r|--replace)
+        SET_UPDATE=1
         ;;
         -r|--run)
         SET_RUN=1
@@ -106,6 +116,13 @@ echo "  App Version Code : $version_name($version_code)"
 fi
 echo ""
 
+# sign app
+if [ "$SET_SIGN" -eq "1" ];then
+    sign $apk_file
+    apk_file="signed_$apk_file"
+fi
+
+
 # get Device list
 devices=(`$ADB_PATH devices | awk '{print $1}' | sed 1,1d`)
 count_device=${#devices[@]}
@@ -115,12 +132,12 @@ if [ "$count_device" -eq 0 ];then
 fi
 
 # install app
-if [ "$SET_INSTALL" -eq "1" ];then
+if [ "$SET_INSTALL" -eq "1" ] || [ "$SET_UPDATE" -eq "1" ];then
     for device in "${devices[@]}";do
         model_name=`$ADB_PATH devices -l |grep $device |awk '{split($5, result, ":"); print result[2]}'`
         is_installed=`$ADB_PATH -s $device shell 'pm list packages' | grep $package_name | wc -l |awk '{print $1}'`
 
-        if [ "$is_installed" -eq 1 ];then
+        if [ "$is_installed" -eq 1 ] && [ ! "$SET_UPDATE" -eq "1" ];then
             echo "- [$model_name] Uninstall the App that same package name."
             result=`$ADB_PATH -s $device uninstall $package_name`
             if [[ $result != *"Success"* ]];then
@@ -132,7 +149,14 @@ if [ "$SET_INSTALL" -eq "1" ];then
             echo ""
         fi
         echo "- [$model_name] Install App"
-        result=`$ADB_PATH -s $device install $apk_file`
+        update_flag=""
+
+        if [ "$SET_UPDATE" -eq "1" ];then 
+            update_flag="-r "
+        fi
+
+        result=`$ADB_PATH -s $device install $update_flag$apk_file`
+        
         if [[ $result != *"Success"* ]];then
             echo "$result"
             #echo "ERROR(4) : install error > $result"
