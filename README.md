@@ -66,10 +66,11 @@ ADB_PATH="/Users/user/android/tools/"
  - install + run + logcat 
 ```
 $adbinstall -a test.apk
-or
-$adbinstall -i -r -l test.apk
-or
-$adbinstall -install -run -logcat test.apk
+```
+
+ - sign + install + run + logcat 
+```
+$adbinstall -a -s test.apk
 ```
 
  - install + run
@@ -87,6 +88,10 @@ $adbinstall -u test.apk
 $adbinstall -a test.apk
 ```
 
+ - update install(keep data) + run
+```
+$adbinstall -k -r test.apk
+```
 
 > 저작권 따위는 없습니다.  막쓰시고..업데이트도 해주시고..
 > 
