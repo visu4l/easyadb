@@ -48,7 +48,7 @@ fi
 while [ "$1" != "" ];do
     case $1 in
         -a|--all)
-        SET_SIGN=1
+        SET_SIGN=0
         SET_INSTALL=1
         SET_RUN=1
         SET_LOGCAT=1
@@ -150,12 +150,17 @@ if [ "$SET_INSTALL" -eq "1" ] || [ "$SET_UPDATE" -eq "1" ];then
         fi
         echo "- [$model_name] Install App"
         update_flag=""
-
         if [ "$SET_UPDATE" -eq "1" ];then 
             update_flag="-r "
         fi
+        
+        device_version=`$ADB_PATH -s $device shell getprop ro.build.version.sdk`
+        grant_perm_flag=""
+        if [ "$device_version" -gt 22 ];then 
+            grant_perm_flag="-g "
+        fi
 
-        result=`$ADB_PATH -s $device install $update_flag$apk_file`
+        result=`$ADB_PATH -s $device install $grant_perm_flag $update_flag $apk_file`
         
         if [[ $result != *"Success"* ]];then
             echo "$result"
