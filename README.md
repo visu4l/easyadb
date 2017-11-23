@@ -5,7 +5,9 @@ adb 를 편하게 쓰고자 만든 스크립트 입니다.
 
 ## 기능(function)
 
+ - Signing
  - Install
+ - Update(keep data)
  - Run (screen wakeup)
  - Logcat (device가 2개 이상인 경우 선택 화면 출력)
  - Uninstall
